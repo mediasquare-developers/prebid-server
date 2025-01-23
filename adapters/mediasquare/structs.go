@@ -6,6 +6,7 @@ import (
 	"github.com/prebid/openrtb/v20/openrtb2"
 	"github.com/prebid/prebid-server/v3/adapters"
 	"github.com/prebid/prebid-server/v3/util/jsonutil"
+	"github.com/prebid/prebid-server/v3/util/ptrutil"
 )
 
 // msqResponse: Bid-Response sent by mediasquare.
@@ -20,15 +21,12 @@ type msqResponse struct {
 
 // msqParameters: Bid-Request sent to mediasquare.
 type msqParameters struct {
-	Codes []msqParametersCodes `json:"codes"`
-	Gdpr  struct {
-		ConsentRequired bool   `json:"consent_required"`
-		ConsentString   string `json:"consent_string"`
-	} `json:"gdpr"`
-	Type    string      `json:"type"`
-	DSA     interface{} `json:"dsa,omitempty"`
-	Support msqSupport  `json:"tech"`
-	Test    bool        `json:"test"`
+	Codes   []msqParametersCodes `json:"codes"`
+	Gdpr    msqParametersGdpr    `json:"gdpr"`
+	Type    string               `json:"type"`
+	DSA     interface{}          `json:"dsa,omitempty"`
+	Support msqSupport           `json:"tech"`
+	Test    bool                 `json:"test"`
 }
 
 type msqResponseBidsVideo struct {
@@ -98,6 +96,11 @@ type msqParametersCodes struct {
 	Owner      string              `json:"owner"`
 	Mediatypes mediaTypes          `json:"mediatypes,omitempty"`
 	Floor      map[string]msqFloor `json:"floor,omitempty"`
+}
+
+type msqParametersGdpr struct {
+	ConsentRequired bool   `json:"consent_required"`
+	ConsentString   string `json:"consent_string"`
 }
 
 type msqFloor struct {
@@ -188,10 +191,7 @@ func initMsqParams(request *openrtb2.BidRequest) (msqParams msqParameters) {
 		Device: request.Device,
 		App:    request.App,
 	}
-	msqParams.Gdpr = struct {
-		ConsentRequired bool   `json:"consent_required"`
-		ConsentString   string `json:"consent_string"`
-	}{
+	msqParams.Gdpr = msqParametersGdpr{
 		ConsentRequired: (parserGDPR{}).getValue("consent_requirement", request) == "true",
 		ConsentString:   (parserGDPR{}).getValue("consent_string", request),
 	}
@@ -202,7 +202,7 @@ func initMsqParams(request *openrtb2.BidRequest) (msqParams msqParameters) {
 
 // setContent: Loads currentImp into msqParams (*msqParametersCodes),
 // returns (errs []error, ok bool) where `ok` express if mandatory content had been loaded.
-func (msqParams *msqParametersCodes) setContent(currentImp openrtb2.Imp) (ok bool) {
+func (msqParams *msqParametersCodes) setContent(currentImp openrtb2.Imp) (ok bool, errs []error) {
 	var (
 		currentMapFloors = make(map[string]msqFloor, 0)
 		currentFloor     = msqFloor{
@@ -215,8 +215,12 @@ func (msqParams *msqParametersCodes) setContent(currentImp openrtb2.Imp) (ok boo
 		ok = true
 		var video mediaTypeVideo
 		currentVideoBytes, _ := jsonutil.Marshal(currentImp.Video)
-		jsonutil.Unmarshal(currentVideoBytes, &video)
-		jsonutil.Unmarshal(currentImp.Video.Ext, &video)
+		if e := jsonutil.Unmarshal(currentVideoBytes, &video); e != nil {
+			errs = append(errs, e)
+		}
+		if e := jsonutil.Unmarshal(currentImp.Video.Ext, &video); e != nil {
+			errs = append(errs, e)
+		}
 
 		msqParams.Mediatypes.Video = &video
 		if msqParams.Mediatypes.Video != nil {
@@ -230,7 +234,9 @@ func (msqParams *msqParametersCodes) setContent(currentImp openrtb2.Imp) (ok boo
 	if currentImp.Banner != nil {
 		ok = true
 		var banner mediaTypeBanner
-		jsonutil.Unmarshal(currentImp.Banner.Ext, &banner)
+		if e := jsonutil.Unmarshal(currentImp.Banner.Ext, &banner); e != nil {
+			errs = append(errs, e)
+		}
 
 		msqParams.Mediatypes.Banner = &banner
 		switch {
@@ -238,12 +244,12 @@ func (msqParams *msqParametersCodes) setContent(currentImp openrtb2.Imp) (ok boo
 			for _, bannerFormat := range currentImp.Banner.Format {
 				currentMapFloors[fmt.Sprintf("%dx%d", bannerFormat.W, bannerFormat.H)] = currentFloor
 				msqParams.Mediatypes.Banner.Sizes = append(msqParams.Mediatypes.Banner.Sizes,
-					[]*int{intToPtrInt(int(bannerFormat.W)), intToPtrInt(int(bannerFormat.H))})
+					[]*int{ptrutil.ToPtr(int(bannerFormat.W)), ptrutil.ToPtr(int(bannerFormat.H))})
 			}
 		case currentImp.Banner.W != nil && currentImp.Banner.H != nil:
 			currentMapFloors[fmt.Sprintf("%dx%d", *(currentImp.Banner.W), *(currentImp.Banner.H))] = currentFloor
 			msqParams.Mediatypes.Banner.Sizes = append(msqParams.Mediatypes.Banner.Sizes,
-				[]*int{intToPtrInt(int(*currentImp.Banner.W)), intToPtrInt(int(*currentImp.Banner.H))})
+				[]*int{ptrutil.ToPtr(int(*currentImp.Banner.W)), ptrutil.ToPtr(int(*currentImp.Banner.H))})
 		}
 
 		if msqParams.Mediatypes.Banner != nil {
@@ -258,7 +264,9 @@ func (msqParams *msqParametersCodes) setContent(currentImp openrtb2.Imp) (ok boo
 	if currentImp.Native != nil {
 		ok = true
 		var native = mediaTypeNative{Type: "native"}
-		jsonutil.Unmarshal(currentImp.Native.Ext, &native)
+		if e := jsonutil.Unmarshal(currentImp.Native.Ext, &native); e != nil {
+			errs = append(errs, e)
+		}
 
 		msqParams.Mediatypes.Native = &native
 		for _, nativeSizes := range msqParams.Mediatypes.Native.Sizes {
