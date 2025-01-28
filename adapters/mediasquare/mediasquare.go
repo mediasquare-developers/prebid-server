@@ -27,13 +27,8 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, reqInfo *adapters.E
 		requestData []*adapters.RequestData
 		errs        []error
 	)
-	defer func() {
-		fmt.Println("errs:", errs)
-		fmt.Println("results:", requestData)
-		fmt.Println("request:", request)
-	}()
 	if request == nil || request.Imp == nil {
-		errs = append(errs, errorWriter("<MakeRequests> request", nil, true))
+		errs = append(errs, errorWriter("<MakeRequests34> request", nil, true))
 		return nil, errs
 	}
 
@@ -61,10 +56,7 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, reqInfo *adapters.E
 		currentCode.Owner = msqExt.Owner
 		currentCode.Code = msqExt.Code
 
-		if ok, errors := currentCode.setContent(imp); ok {
-			if errors != nil {
-				errs = append(errs, errors...)
-			}
+		if currentCode.setContent(imp) {
 			msqParams.Codes = append(msqParams.Codes, currentCode)
 		}
 	}
@@ -72,6 +64,7 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, reqInfo *adapters.E
 	req, err := a.makeRequest(request, &msqParams)
 	if err != nil {
 		errs = append(errs, err)
+		fmt.Println("err != nil:", err)
 	} else if req != nil {
 		requestData = append(requestData, req)
 	}
