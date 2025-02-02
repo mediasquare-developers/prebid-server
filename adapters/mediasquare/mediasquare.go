@@ -28,7 +28,7 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, reqInfo *adapters.E
 		errs        []error
 	)
 	if request == nil || request.Imp == nil {
-		errs = append(errs, errorWriter("<MakeRequests34> request", nil, true))
+		errs = append(errs, errorWriter("<MakeRequests> request", nil, true))
 		return nil, errs
 	}
 
@@ -64,7 +64,6 @@ func (a *adapter) MakeRequests(request *openrtb2.BidRequest, reqInfo *adapters.E
 	req, err := a.makeRequest(request, &msqParams)
 	if err != nil {
 		errs = append(errs, err)
-		fmt.Println("err != nil:", err)
 	} else if req != nil {
 		requestData = append(requestData, req)
 	}
